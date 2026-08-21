@@ -27,7 +27,10 @@ import {
   Sparkles,
   ExternalLink,
   RefreshCw,
-  Camera
+  Camera,
+  Database,
+  Copy,
+  Users
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
@@ -43,6 +46,12 @@ export default function AdminDashboard() {
   const [systemLogs, setSystemLogs] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Developer Data Console State
+  const [devUsers, setDevUsers] = useState([]);
+  const [devComplaints, setDevComplaints] = useState([]);
+  const [devStats, setDevStats] = useState(null);
+  const [devLoaded, setDevLoaded] = useState(false);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -96,6 +105,39 @@ export default function AdminDashboard() {
     }
     fetchAdminData();
   }, [user, authLoading, navigate]);
+
+  const isDeveloper = user?.role === 'developer';
+
+  const fetchDeveloperData = async () => {
+    if (!isDeveloper) return;
+    try {
+      const [uRes, cRes, sRes] = await Promise.all([
+        axios.get(`${API_URL}/api/dev/users`, { withCredentials: true }),
+        axios.get(`${API_URL}/api/dev/complaints`, { withCredentials: true }),
+        axios.get(`${API_URL}/api/dev/stats`, { withCredentials: true })
+      ]);
+      setDevUsers(uRes.data.documents || []);
+      setDevComplaints(cRes.data.documents || []);
+      setDevStats(sRes.data);
+      setDevLoaded(true);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'dev_console' && isDeveloper && !devLoaded) {
+      fetchDeveloperData();
+    }
+  }, [activeTab, isDeveloper]);
+
+  const copyToClipboard = (obj) => {
+    try {
+      navigator.clipboard.writeText(JSON.stringify(obj, null, 2));
+    } catch (e) {
+      // ignore
+    }
+  };
 
   const openManageModal = (complaint) => {
     setSelectedComplaint(complaint);
@@ -297,6 +339,24 @@ export default function AdminDashboard() {
               <ShieldAlert className="h-4 w-4" />
               System Logs
             </button>
+
+            {isDeveloper && (
+              <button
+                onClick={() => setActiveTab('dev_console')}
+                data-testid="admin-tab-dev-console"
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all ${
+                  activeTab === 'dev_console'
+                    ? 'bg-purple-50 text-purple-700 font-bold shadow-sm'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                }`}
+              >
+                <Database className="h-4 w-4" />
+                Data Console
+                <span className="ml-auto text-[9px] font-extrabold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded uppercase">
+                  Dev
+                </span>
+              </button>
+            )}
           </nav>
         </div>
 
@@ -640,6 +700,232 @@ export default function AdminDashboard() {
                     <span className="text-slate-300">{log.event}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Developer Data Console (role=developer only) */}
+          {activeTab === 'dev_console' && isDeveloper && (
+            <div className="space-y-6" data-testid="dev-console-view">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Database className="h-5 w-5 text-purple-600" />
+                    <h3 className="text-lg font-bold text-slate-900 font-outfit">
+                      Data Console — Raw Collections
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Full-fidelity MongoDB collection view. Available only to the developer/system-diagnostic role.
+                    PII visible for troubleshooting; password hashes always redacted.
+                  </p>
+                </div>
+                <button
+                  onClick={fetchDeveloperData}
+                  data-testid="dev-console-refresh-btn"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-lg text-xs font-bold transition-colors"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Refresh
+                </button>
+              </div>
+
+              {/* Real DB Stats (no floor masking) */}
+              {devStats && (
+                <div className="p-4 bg-purple-50/50 border border-purple-200 rounded-xl grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <p className="text-[11px] font-semibold text-purple-700/80 uppercase tracking-wide">
+                      Real Total Users
+                    </p>
+                    <p className="text-2xl font-extrabold text-purple-900 font-outfit" data-testid="dev-real-users">
+                      {devStats.real_total_users}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold text-purple-700/80 uppercase tracking-wide">
+                      Real Total Complaints
+                    </p>
+                    <p className="text-2xl font-extrabold text-purple-900 font-outfit" data-testid="dev-real-complaints">
+                      {devStats.real_total_complaints}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold text-purple-700/80 uppercase tracking-wide">
+                      Users by Role
+                    </p>
+                    <div className="text-[11px] text-purple-900 font-mono mt-1 space-y-0.5">
+                      {Object.entries(devStats.users_by_role || {}).map(([r, n]) => (
+                        <div key={r}>{r}: <strong>{n}</strong></div>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[11px] font-semibold text-purple-700/80 uppercase tracking-wide">
+                      Complaints by Status
+                    </p>
+                    <div className="text-[11px] text-purple-900 font-mono mt-1 space-y-0.5">
+                      {Object.entries(devStats.complaints_by_status || {}).map(([s, n]) => (
+                        <div key={s}>{s}: <strong>{n}</strong></div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Users Collection */}
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-purple-600" />
+                    <h4 className="text-sm font-bold text-slate-900 font-outfit">
+                      users collection <span className="text-slate-400 font-medium">({devUsers.length} docs)</span>
+                    </h4>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase bg-red-100 text-red-700 px-2 py-0.5 rounded">
+                    PII Visible
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs" data-testid="dev-users-table">
+                    <thead className="bg-slate-50 text-slate-500 font-bold border-y border-slate-200">
+                      <tr>
+                        <th className="py-2.5 px-3">id</th>
+                        <th className="py-2.5 px-3">name</th>
+                        <th className="py-2.5 px-3">mobile</th>
+                        <th className="py-2.5 px-3">email</th>
+                        <th className="py-2.5 px-3">role</th>
+                        <th className="py-2.5 px-3">ward / dept</th>
+                        <th className="py-2.5 px-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {devUsers.map((u) => (
+                        <tr key={u.id} className="hover:bg-purple-50/30">
+                          <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500">{u.id}</td>
+                          <td className="py-2.5 px-3 font-bold text-slate-800">{u.name}</td>
+                          <td className="py-2.5 px-3 font-mono text-slate-700">{u.mobile}</td>
+                          <td className="py-2.5 px-3 text-slate-700">{u.email}</td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                u.role === 'admin'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : u.role === 'developer'
+                                  ? 'bg-purple-100 text-purple-800'
+                                  : 'bg-emerald-100 text-emerald-800'
+                              }`}
+                            >
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600">{u.ward || u.department || '—'}</td>
+                          <td className="py-2.5 px-3 text-right">
+                            <button
+                              onClick={() => copyToClipboard(u)}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[11px] font-bold"
+                            >
+                              <Copy className="h-3 w-3" />
+                              Copy JSON
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Complaints Collection (raw) */}
+              <div className="bg-white border border-slate-200/80 rounded-2xl p-6 shadow-sm space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <ClipboardList className="h-4 w-4 text-purple-600" />
+                    <h4 className="text-sm font-bold text-slate-900 font-outfit">
+                      complaints collection <span className="text-slate-400 font-medium">({devComplaints.length} docs)</span>
+                    </h4>
+                  </div>
+                  <span className="text-[10px] font-bold uppercase bg-red-100 text-red-700 px-2 py-0.5 rounded">
+                    Includes Reporter PII
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {devComplaints.map((c) => (
+                    <div
+                      key={c.complaint_number}
+                      className="border border-slate-200 rounded-xl overflow-hidden"
+                      data-testid={`dev-complaint-${c.complaint_number}`}
+                    >
+                      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200">
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono font-bold text-blue-700 text-xs">{c.complaint_number}</span>
+                          <span className="text-[11px] text-slate-500">
+                            {c.category} · {c.priority} · {c.status}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => copyToClipboard(c)}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 rounded text-[11px] font-bold"
+                        >
+                          <Copy className="h-3 w-3" />
+                          Copy JSON
+                        </button>
+                      </div>
+                      <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                        <div>
+                          <span className="text-slate-400 block font-semibold uppercase tracking-wide text-[10px]">
+                            Reporter (full PII)
+                          </span>
+                          <p className="text-slate-800 font-mono">
+                            {c.reporter_full_name || '—'}
+                            <br />
+                            {c.reporter_mobile ? `📱 ${c.reporter_mobile}` : ''}
+                            <br />
+                            {c.reporter_email ? `✉️ ${c.reporter_email}` : ''}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-slate-400 block font-semibold uppercase tracking-wide text-[10px]">
+                            Location
+                          </span>
+                          <p className="text-slate-800">
+                            {c.location?.address}<br />
+                            <span className="font-mono text-[11px] text-slate-500">
+                              {c.location?.latitude}, {c.location?.longitude}
+                            </span>
+                          </p>
+                        </div>
+                        <div className="md:col-span-2">
+                          <span className="text-slate-400 block font-semibold uppercase tracking-wide text-[10px]">
+                            Original description ({c.original_language})
+                          </span>
+                          <p className="text-slate-800 italic">"{c.description}"</p>
+                        </div>
+                        {c.ai_analysis && (
+                          <div className="md:col-span-2">
+                            <span className="text-slate-400 block font-semibold uppercase tracking-wide text-[10px]">
+                              AI Analysis payload
+                            </span>
+                            <pre className="text-[11px] bg-slate-900 text-emerald-300 p-2 rounded-lg overflow-x-auto font-mono">
+                              {JSON.stringify(c.ai_analysis, null, 2)}
+                            </pre>
+                          </div>
+                        )}
+                        {c.internal_notes && (
+                          <div className="md:col-span-2">
+                            <span className="text-slate-400 block font-semibold uppercase tracking-wide text-[10px]">
+                              Internal admin notes
+                            </span>
+                            <p className="text-slate-700 bg-amber-50 border border-amber-200 rounded p-2 text-[11px]">
+                              {c.internal_notes}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}

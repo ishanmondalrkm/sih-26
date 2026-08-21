@@ -49,6 +49,7 @@ proof-of-work photos before marking them resolved.
 - ✅ In-app notification system (complaint filed, department assigned, status update,
   resolution — including a callout when a proof photo has been attached)
 - ✅ Rule-based multilingual fallback (Bengali / Hindi / Tamil) when LLM is unavailable
+- ✅ **Developer Data Console** (`role=developer` only) — raw `users`/`complaints`/`notifications` collections with full PII, real (unmasked) DB counts, copy-to-clipboard JSON per row. Backend endpoints: `GET /api/dev/users`, `/api/dev/complaints`, `/api/dev/notifications`, `/api/dev/stats` (all guarded by `require_developer`)
 
 ## Prioritized Backlog
 

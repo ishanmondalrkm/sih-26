@@ -58,6 +58,12 @@ async def require_admin_or_dev(request: Request) -> Dict[str, Any]:
         raise HTTPException(status_code=403, detail="Access denied. Administrator privilege required.")
     return user
 
+async def require_developer(request: Request) -> Dict[str, Any]:
+    user = await require_auth(request)
+    if user.get("role") != "developer":
+        raise HTTPException(status_code=403, detail="Access denied. Developer/system diagnostic privilege required.")
+    return user
+
 
 # ---------------- Request / Response Pydantic Models ---------------- #
 class UserRegisterRequest(BaseModel):
@@ -602,6 +608,64 @@ async def get_system_logs(user: Dict[str, Any] = Depends(require_admin_or_dev)):
         {"timestamp": (datetime.now(timezone.utc) - timedelta(hours=3)).isoformat(), "level": "INFO", "service": "Notification Hub", "event": "In-app dispatch worker running with 0 errors"}
     ]
     return {"logs": logs, "privacy_notice": "Citizen identity data is protected and unavailable in the administrative portal."}
+
+
+# ---------------- Developer-Only Data Console (Full PII Access) ---------------- #
+@api_router.get("/dev/users")
+async def dev_get_all_users(dev: Dict[str, Any] = Depends(require_developer)):
+    """Developer-only: raw users collection with all PII except password_hash."""
+    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(500)
+    return {
+        "collection": "users",
+        "count": len(users),
+        "documents": users,
+        "notice": "PII visible under developer/system-diagnostic role. Password hashes are always redacted."
+    }
+
+@api_router.get("/dev/complaints")
+async def dev_get_all_complaints(dev: Dict[str, Any] = Depends(require_developer)):
+    """Developer-only: raw complaints collection with all fields including PII and internal notes."""
+    complaints = await db.complaints.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Also join with reporting user's mobile/email for full diagnostic view
+    user_cache: Dict[str, Dict[str, Any]] = {}
+    for c in complaints:
+        uid = c.get("user_id")
+        if uid and uid not in user_cache:
+            u = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0})
+            user_cache[uid] = u or {}
+        u = user_cache.get(uid, {})
+        c["reporter_mobile"] = u.get("mobile")
+        c["reporter_email"] = u.get("email")
+        c["reporter_full_name"] = u.get("name")
+    return {
+        "collection": "complaints",
+        "count": len(complaints),
+        "documents": complaints
+    }
+
+@api_router.get("/dev/notifications")
+async def dev_get_all_notifications(dev: Dict[str, Any] = Depends(require_developer)):
+    notifs = await db.notifications.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return {"collection": "notifications", "count": len(notifs), "documents": notifs}
+
+@api_router.get("/dev/stats")
+async def dev_get_real_stats(dev: Dict[str, Any] = Depends(require_developer)):
+    """Developer-only: REAL database counts (no seed-floor masking)."""
+    total_users = await db.users.count_documents({})
+    total_complaints = await db.complaints.count_documents({})
+    by_role = await db.users.aggregate([
+        {"$group": {"_id": "$role", "count": {"$sum": 1}}}
+    ]).to_list(20)
+    by_status = await db.complaints.aggregate([
+        {"$group": {"_id": "$status", "count": {"$sum": 1}}}
+    ]).to_list(20)
+    return {
+        "real_total_users": total_users,
+        "real_total_complaints": total_complaints,
+        "users_by_role": {b["_id"]: b["count"] for b in by_role if b["_id"]},
+        "complaints_by_status": {b["_id"]: b["count"] for b in by_status if b["_id"]},
+        "notice": "These are the raw DB counts. The public/admin dashboards apply floor values for demo optics."
+    }
 
 
 # ---------------- Notifications ---------------- #
