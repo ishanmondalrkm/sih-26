@@ -1,0 +1,37 @@
+{
+  "project_name": "CivicPulse",
+  "theme": "light",
+  "typography": {
+    "heading_font": "Outfit",
+    "body_font": "Plus Jakarta Sans",
+    "mono_font": "JetBrains Mono"
+  },
+  "colors": {
+    "primary": "#2563EB",
+    "primary_dark": "#1E40AF",
+    "background_light": "#F8FAFC",
+    "card_bg": "#FFFFFF",
+    "slate_neutral": "#64748B",
+    "border_color": "#E2E8F0",
+    "success": "#10B981",
+    "warning": "#F59E0B",
+    "danger": "#EF4444"
+  },
+  "visual_enhancers": {
+    "border_radius": "rounded-xl",
+    "shadow": "shadow-sm hover:shadow-md transition-shadow",
+    "glassmorphism": "backdrop-blur-xl bg-white/80 border border-slate-200/60"
+  },
+  "image_urls": {
+    "hero_city": "https://images.unsplash.com/photo-1718756877336-82281fbe0c37?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2Nzh8MHwxfHNlYXJjaHwxfHxjaXZpYyUyMGNvbW11bml0eSUyMGNpdHklMjBoYWxsJTIwbW9kZXJuJTIwYnVpbGRpbmd8ZW58MHx8fHwxNzg3Mjg3MTExfDA&ixlib=rb-4.1.0&q=85",
+    "dashboard_mock": "https://images.unsplash.com/photo-1651129520737-7137123b7611?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDF8MHwxfHNlYXJjaHw0fHxjaXRpemVuJTIwcmVwb3J0aW5nJTIwbW9iaWxlJTIwYXBwJTIwZGFzaGJvYXJkfGVufDB8fHx8MTc4NzI4NzEwM3ww&ixlib=rb-4.1.0&q=85",
+    "road_repair": "https://images.pexels.com/photos/6018646/pexels-photo-6018646.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+  },
+  "instructions_to_main_agent": "Build a fully functional CivicPulse Citizen Complaint & Resolution Management System with Landing page, Citizen Auth & Dashboard (submit text/voice/photo complaints, interactive map, timeline tracking, notification drawer), and Admin Portal (City overview, complaint queue, AI duplicate & multilingual pipeline, ward analysis, privacy protected audit logs). Ensure all interactive elements have data-testid attributes and adhere to clean Tailwind CSS styling.",
+  "universal_guidelines": [
+    "Never use full transparent backgrounds in headers or overlays",
+    "All interactive elements must include data-testid",
+    "Use generous spacing (p-6, p-8, gap-6)",
+    "Clean civic blue and slate palette"
+  ]
+}
