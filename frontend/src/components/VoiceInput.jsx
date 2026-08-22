@@ -6,14 +6,15 @@ export default function VoiceInput({ onTranscript }) {
   const [selectedLang, setSelectedLang] = useState('hi-IN');
 
   const languages = [
-    { code: 'hi-IN', label: 'Hindi (हिंदी)' },
-    { code: 'bn-IN', label: 'Bengali (বাংলা)' },
-    { code: 'ta-IN', label: 'Tamil (தமிழ்)' },
-    { code: 'te-IN', label: 'Telugu (తెలుగు)' },
-    { code: 'mr-IN', label: 'Marathi (मराठी)' },
-    { code: 'kn-IN', label: 'Kannada (ಕನ್ನಡ)' },
-    { code: 'en-IN', label: 'English (Indian)' }
-  ];
+  { code: 'hi-IN', label: 'Hindi (हिंदी)' },
+  { code: 'bn-IN', label: 'Bengali (বাংলা)' },
+  { code: 'or-IN', label: 'Odia (ଓଡ଼ିଆ)' },
+  { code: 'ta-IN', label: 'Tamil (தமிழ்)' },
+  { code: 'te-IN', label: 'Telugu (తెలుగు)' },
+  { code: 'mr-IN', label: 'Marathi (मराठी)' },
+  { code: 'kn-IN', label: 'Kannada (ಕನ್ನಡ)' },
+  { code: 'en-IN', label: 'English (Indian)' }
+];
 
   const toggleRecording = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -23,6 +24,7 @@ export default function VoiceInput({ onTranscript }) {
         const demoTexts = {
           'hi-IN': 'हमारे रास्ते पर बहुत बड़ा गड्ढा हो गया है, रात में गाड़ियां फिसल रही हैं।',
           'bn-IN': 'আমাদের রাস্তার বাতি একদম বন্ধ এবং ড্রেনেজ নোংরা জল উপচে পড়ছে।',
+          'or-IN': 'ଆମ ଅଞ୍ଚଳର ରାସ୍ତାରେ ବହୁତ ବଡ଼ ଗାତ ହୋଇଛି, ଯାହା ଯୋଗୁଁ ଲୋକମାନେ ଯାତାୟାତରେ ଅସୁବିଧା ଭୋଗୁଛନ୍ତି।',
           'ta-IN': 'எங்கள் பகுதியில் குடிநீர் குழாய் உடைந்து தண்ணீர் வீணாகிறது.',
           'en-IN': 'Heavy garbage overflow near the bus stand blocking pedestrian movement.'
         };

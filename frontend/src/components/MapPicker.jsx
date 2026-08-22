@@ -1,186 +1,650 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MapPin, Navigation, Compass } from 'lucide-react';
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  useMap,
+  useMapEvents
+} from 'react-leaflet';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 
-export default function MapPicker({ location, onChange }) {
-  const [lat, setLat] = useState(location?.latitude || 12.9784);
-  const [lng, setLng] = useState(location?.longitude || 77.6408);
-  const [address, setAddress] = useState(location?.address || '12th Main Road, Indiranagar');
-  const [ward, setWard] = useState(location?.ward || 'Ward 12 - Indiranagar');
-  const [isLocating, setIsLocating] = useState(false);
+// ----------------------------------------------------
+// Fix Leaflet marker icons
+// ----------------------------------------------------
 
-  const predefinedWards = [
-    { name: 'Ward 12 - Indiranagar', lat: 12.9784, lng: 77.6408, address: '100 Feet Rd / 12th Main, Indiranagar' },
-    { name: 'Ward 15 - Koramangala', lat: 12.9352, lng: 77.6245, address: '80 Feet Rd, 5th Block, Koramangala' },
-    { name: 'Ward 08 - Malleshwaram', lat: 13.0031, lng: 77.5643, address: '4th Cross Sampige Rd, Malleshwaram' },
-    { name: 'Ward 22 - Whitefield', lat: 12.9698, lng: 77.7500, address: 'ITPL Main Rd, Whitefield' },
-    { name: 'Ward 05 - Jayanagar', lat: 12.9308, lng: 77.5838, address: '4th Block Complex, Jayanagar' },
-    { name: 'Ward 19 - HSR Layout', lat: 12.9121, lng: 77.6446, address: 'Sector 2, HSR Ring Road' }
-  ];
+delete L.Icon.Default.prototype._getIconUrl;
 
-  const handleUseMyLocation = () => {
-    setIsLocating(true);
-    if ('geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const newLat = Number(pos.coords.latitude.toFixed(4));
-          const newLng = Number(pos.coords.longitude.toFixed(4));
-          setLat(newLat);
-          setLng(newLng);
-          const autoAddress = `GPS Location: Lat ${newLat}, Lng ${newLng}`;
-          setAddress(autoAddress);
-          setIsLocating(false);
-          onChange({
-            latitude: newLat,
-            longitude: newLng,
-            address: autoAddress,
-            ward: ward
-          });
-        },
-        () => {
-          const fallback = predefinedWards[0];
-          setLat(fallback.lat);
-          setLng(fallback.lng);
-          setAddress(fallback.address);
-          setWard(fallback.name);
-          setIsLocating(false);
-          onChange({
-            latitude: fallback.lat,
-            longitude: fallback.lng,
-            address: fallback.address,
-            ward: fallback.name
-          });
-        },
-        { timeout: 5000 }
-      );
-    } else {
-      setIsLocating(false);
-    }
-  };
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png',
 
-  const handleWardSelect = (e) => {
-    const selected = predefinedWards.find((w) => w.name === e.target.value);
-    if (selected) {
-      setWard(selected.name);
-      setLat(selected.lat);
-      setLng(selected.lng);
-      setAddress(selected.address);
-      onChange({
-        latitude: selected.lat,
-        longitude: selected.lng,
-        address: selected.address,
-        ward: selected.name
+  iconUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png',
+
+  shadowUrl:
+    'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png'
+});
+
+// ----------------------------------------------------
+// Recenter map when GPS location changes
+// ----------------------------------------------------
+
+function RecenterMap({ lat, lng, followUser }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (followUser) {
+      map.setView([lat, lng], 16, {
+        animate: true
       });
     }
-  };
+  }, [lat, lng, followUser, map]);
 
-  const handleMapClick = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
+  return null;
+}
 
-    const newLat = Number((13.04 - y * 0.16).toFixed(4));
-    const newLng = Number((77.52 + x * 0.25).toFixed(4));
-    setLat(newLat);
-    setLng(newLng);
-    const pinAddress = `Pinned on Map (${newLat}° N, ${newLng}° E)`;
-    setAddress(pinAddress);
+// ----------------------------------------------------
+// Handle clicking on the real map
+// ----------------------------------------------------
+
+function MapClickHandler({ onLocationSelect, ward, address }) {
+  useMapEvents({
+    click(e) {
+      const newLat = Number(e.latlng.lat.toFixed(6));
+      const newLng = Number(e.latlng.lng.toFixed(6));
+
+      const pinAddress =
+        `Pinned Location: ${newLat}, ${newLng}`;
+
+      onLocationSelect({
+        latitude: newLat,
+        longitude: newLng,
+        address: pinAddress,
+        ward: ward
+      });
+    }
+  });
+
+  return null;
+}
+
+// ----------------------------------------------------
+// Main MapPicker component
+// ----------------------------------------------------
+
+export default function MapPicker({ location, onChange }) {
+
+  // --------------------------------------------------
+  // Initial location
+  // --------------------------------------------------
+
+  const [lat, setLat] = useState(
+    location?.latitude ?? 20.2961
+  );
+
+  const [lng, setLng] = useState(
+    location?.longitude ?? 85.8245
+  );
+
+  const [address, setAddress] = useState(
+    location?.address || ''
+  );
+
+  const [ward, setWard] = useState(
+    location?.ward || 'Select Ward'
+  );
+
+  // --------------------------------------------------
+  // GPS states
+  // --------------------------------------------------
+
+  const [isLocating, setIsLocating] = useState(false);
+  const [isTracking, setIsTracking] = useState(false);
+  const [followUser, setFollowUser] = useState(false);
+
+  // Stores browser GPS watcher ID
+  const watchId = useRef(null);
+
+  // --------------------------------------------------
+  // Generate Ward 1 - Ward 100
+  // --------------------------------------------------
+
+  const predefinedWards = Array.from(
+    { length: 100 },
+    (_, index) => `Ward ${index + 1}`
+  );
+
+  // --------------------------------------------------
+  // Send current data to parent
+  // --------------------------------------------------
+
+  const sendLocationToParent = (
+    newLat,
+    newLng,
+    newAddress,
+    newWard
+  ) => {
     onChange({
       latitude: newLat,
       longitude: newLng,
-      address: pinAddress,
+      address: newAddress,
+      ward: newWard
+    });
+  };
+
+  // --------------------------------------------------
+  // START REAL-TIME GPS TRACKING
+  // --------------------------------------------------
+
+  const startLocationTracking = () => {
+
+    if (!navigator.geolocation) {
+      alert(
+        'Geolocation is not supported by your browser.'
+      );
+      return;
+    }
+
+    // If already tracking, stop it
+    if (isTracking) {
+      stopLocationTracking();
+      return;
+    }
+
+    setIsLocating(true);
+    setFollowUser(true);
+
+    watchId.current =
+      navigator.geolocation.watchPosition(
+
+        // --------------------------------------------
+        // GPS SUCCESS
+        // --------------------------------------------
+
+        (position) => {
+
+          const newLat = Number(
+            position.coords.latitude.toFixed(6)
+          );
+
+          const newLng = Number(
+            position.coords.longitude.toFixed(6)
+          );
+
+          const accuracy = Math.round(
+            position.coords.accuracy
+          );
+
+          const gpsAddress =
+            `GPS Location: ${newLat}, ${newLng}`;
+
+          // Update map coordinates
+          setLat(newLat);
+          setLng(newLng);
+
+          // Update displayed address
+          setAddress(gpsAddress);
+
+          setIsLocating(false);
+          setIsTracking(true);
+
+          // IMPORTANT:
+          // Ward is NOT changed by GPS.
+          // Whatever ward user selected remains selected.
+
+          onChange({
+            latitude: newLat,
+            longitude: newLng,
+            address: gpsAddress,
+            ward: ward,
+            accuracy: accuracy
+          });
+        },
+
+        // --------------------------------------------
+        // GPS ERROR
+        // --------------------------------------------
+
+        (error) => {
+
+          console.error(
+            'Geolocation error:',
+            error
+          );
+
+          setIsLocating(false);
+          setIsTracking(false);
+          setFollowUser(false);
+
+          if (error.code === 1) {
+
+            alert(
+              'Location permission was denied. Please allow location access in your browser.'
+            );
+
+          } else if (error.code === 2) {
+
+            alert(
+              'Your location could not be determined. Please try again.'
+            );
+
+          } else if (error.code === 3) {
+
+            alert(
+              'Location request timed out. Please try again.'
+            );
+
+          } else {
+
+            alert(
+              'Unable to get your current location.'
+            );
+          }
+        },
+
+        // --------------------------------------------
+        // GPS OPTIONS
+        // --------------------------------------------
+
+        {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0
+        }
+      );
+  };
+
+  // --------------------------------------------------
+  // STOP GPS TRACKING
+  // --------------------------------------------------
+
+  const stopLocationTracking = () => {
+
+    if (watchId.current !== null) {
+
+      navigator.geolocation.clearWatch(
+        watchId.current
+      );
+
+      watchId.current = null;
+    }
+
+    setIsTracking(false);
+    setIsLocating(false);
+    setFollowUser(false);
+  };
+
+  // --------------------------------------------------
+  // Cleanup GPS watcher when component disappears
+  // --------------------------------------------------
+
+  useEffect(() => {
+
+    return () => {
+
+      if (watchId.current !== null) {
+
+        navigator.geolocation.clearWatch(
+          watchId.current
+        );
+
+        watchId.current = null;
+      }
+    };
+
+  }, []);
+
+  // --------------------------------------------------
+  // MANUAL MAP LOCATION
+  // --------------------------------------------------
+
+  const handleManualLocation = ({
+    latitude,
+    longitude,
+    address: newAddress
+  }) => {
+
+    // Stop following GPS when user manually selects
+    // another point on the map.
+    setFollowUser(false);
+
+    setLat(latitude);
+    setLng(longitude);
+    setAddress(newAddress);
+
+    // IMPORTANT:
+    // Ward stays exactly the same.
+
+    onChange({
+      latitude: latitude,
+      longitude: longitude,
+      address: newAddress,
       ward: ward
     });
   };
 
+  // --------------------------------------------------
+  // WARD SELECTION
+  // --------------------------------------------------
+
+  const handleWardSelect = (e) => {
+
+    const selectedWard = e.target.value;
+
+    setWard(selectedWard);
+
+    // IMPORTANT:
+    //
+    // Selecting a ward does NOT:
+    // - change latitude
+    // - change longitude
+    // - move the map
+    // - move the marker
+    //
+    // Ward is only user information.
+
+    onChange({
+      latitude: lat,
+      longitude: lng,
+      address: address,
+      ward: selectedWard
+    });
+  };
+
+  // --------------------------------------------------
+  // ADDRESS CHANGE
+  // --------------------------------------------------
+
+  const handleAddressChange = (e) => {
+
+    const newAddress = e.target.value;
+
+    setAddress(newAddress);
+
+    // Address change also does NOT move the map.
+
+    onChange({
+      latitude: lat,
+      longitude: lng,
+      address: newAddress,
+      ward: ward
+    });
+  };
+
+  // --------------------------------------------------
+  // Map starting position
+  // --------------------------------------------------
+
+  const mapCenter = [lat, lng];
+
+  // --------------------------------------------------
+  // UI
+  // --------------------------------------------------
+
   return (
-    <div className="space-y-3" data-testid="map-picker-component">
+
+    <div
+      className="space-y-3"
+      data-testid="map-picker-component"
+    >
+
+      {/* ============================================ */}
+      {/* HEADER */}
+      {/* ============================================ */}
+
       <div className="flex flex-wrap items-center justify-between gap-2">
+
         <div className="flex items-center gap-2">
+
           <MapPin className="h-4 w-4 text-blue-600" />
-          <span className="text-sm font-semibold text-slate-800">Location Details</span>
+
+          <span className="text-sm font-semibold text-slate-800">
+            Location Details
+          </span>
+
         </div>
+
+        {/* GPS BUTTON */}
+
         <button
           type="button"
-          onClick={handleUseMyLocation}
+          onClick={startLocationTracking}
           disabled={isLocating}
           data-testid="use-current-location-btn"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg transition-colors"
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+            isTracking
+              ? 'text-red-700 bg-red-50 hover:bg-red-100 border border-red-200'
+              : 'text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200'
+          }`}
         >
-          <Navigation className={`h-3.5 w-3.5 ${isLocating ? 'animate-spin' : ''}`} />
-          {isLocating ? 'Detecting GPS...' : 'Use My Current Location'}
+
+          <Navigation
+            className={`h-3.5 w-3.5 ${
+              isLocating
+                ? 'animate-spin'
+                : ''
+            }`}
+          />
+
+          {isLocating
+            ? 'Detecting GPS...'
+            : isTracking
+            ? 'Stop GPS Tracking'
+            : 'Use My Current Location'}
+
         </button>
+
       </div>
 
+      {/* ============================================ */}
+      {/* WARD + ADDRESS */}
+      {/* ============================================ */}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+
+        {/* ------------------------------------------ */}
+        {/* WARD */}
+        {/* ------------------------------------------ */}
+
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Select Municipal Ward</label>
+
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            Select Municipal Ward
+          </label>
+
           <select
             value={ward}
             onChange={handleWardSelect}
             data-testid="ward-selector-dropdown"
             className="w-full text-xs bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
-            {predefinedWards.map((w) => (
-              <option key={w.name} value={w.name}>
-                {w.name}
+
+            <option value="Select Ward">
+              Select Ward
+            </option>
+
+            {predefinedWards.map((wardName) => (
+
+              <option
+                key={wardName}
+                value={wardName}
+              >
+                {wardName}
               </option>
+
             ))}
+
           </select>
+
         </div>
+
+        {/* ------------------------------------------ */}
+        {/* ADDRESS */}
+        {/* ------------------------------------------ */}
+
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">Street / Landmark Address</label>
+
+          <label className="block text-xs font-medium text-slate-600 mb-1">
+            Street / Landmark Address
+          </label>
+
           <input
             type="text"
             value={address}
-            onChange={(e) => {
-              setAddress(e.target.value);
-              onChange({ latitude: lat, longitude: lng, address: e.target.value, ward });
-            }}
+            onChange={handleAddressChange}
             placeholder="e.g. Near Community Center, 2nd Cross"
             data-testid="street-address-input"
             className="w-full text-xs bg-white border border-slate-200 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
+
         </div>
+
       </div>
 
-      <div
-        onClick={handleMapClick}
-        data-testid="interactive-map-canvas"
-        className="relative w-full h-40 bg-slate-100 border border-slate-200 rounded-xl overflow-hidden cursor-crosshair shadow-inner group"
-        style={{
-          backgroundImage: 'radial-gradient(#cbd5e1 1.2px, transparent 1.2px), radial-gradient(#e2e8f0 1.2px, #f8fafc 1.2px)',
-          backgroundSize: '24px 24px',
-          backgroundPosition: '0 0, 12px 12px'
-        }}
-      >
-        <div className="absolute inset-0 opacity-20 pointer-events-none">
-          <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-            <line x1="10%" y1="0" x2="10%" y2="100%" stroke="#2563EB" strokeWidth="2" strokeDasharray="4 4" />
-            <line x1="50%" y1="0" x2="50%" y2="100%" stroke="#64748B" strokeWidth="3" />
-            <line x1="85%" y1="0" x2="85%" y2="100%" stroke="#2563EB" strokeWidth="2" strokeDasharray="4 4" />
-            <line x1="0" y1="35%" x2="100%" y2="35%" stroke="#64748B" strokeWidth="3" />
-            <line x1="0" y1="75%" x2="100%" y2="75%" stroke="#2563EB" strokeWidth="2" />
-          </svg>
+      {/* ============================================ */}
+      {/* REAL OPENSTREETMAP MAP */}
+      {/* ============================================ */}
+
+      <div className="relative w-full rounded-xl overflow-hidden border border-slate-200 shadow-inner">
+
+        <MapContainer
+          center={mapCenter}
+          zoom={16}
+          scrollWheelZoom={true}
+          className="w-full h-72"
+        >
+
+          {/* OpenStreetMap */}
+
+          <TileLayer
+            attribution='&copy; OpenStreetMap contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+
+          {/* Follow GPS */}
+
+          <RecenterMap
+            lat={lat}
+            lng={lng}
+            followUser={followUser}
+          />
+
+          {/* Map click */}
+
+          <MapClickHandler
+            ward={ward}
+            address={address}
+            onLocationSelect={handleManualLocation}
+          />
+
+          {/* ====================================== */}
+          {/* LOCATION MARKER */}
+          {/* ====================================== */}
+
+          <Marker
+            position={[lat, lng]}
+          >
+
+            <Popup>
+
+              <div className="text-sm">
+
+                <strong>
+                  CivicPulse Complaint Location
+                </strong>
+
+                <br />
+
+                Latitude: {lat}
+
+                <br />
+
+                Longitude: {lng}
+
+                <br />
+
+                Ward: {ward}
+
+                <br />
+
+                {isTracking && (
+
+                  <span className="text-green-600 font-semibold">
+
+                    ● Live GPS Tracking
+
+                  </span>
+
+                )}
+
+              </div>
+
+            </Popup>
+
+          </Marker>
+
+        </MapContainer>
+
+        {/* Map instruction */}
+
+        <div className="absolute top-2 right-2 z-[1000] bg-blue-600 text-white text-[10px] font-medium px-2 py-1 rounded shadow-sm">
+
+          Click map to select location
+
         </div>
 
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="flex flex-col items-center animate-bounce">
-            <div className="bg-red-600 text-white p-2 rounded-full shadow-lg border-2 border-white">
-              <MapPin className="h-4 w-4" />
-            </div>
-            <div className="w-2.5 h-1 bg-black/30 rounded-full mt-0.5 filter blur-[0.5px]"></div>
+      </div>
+
+      {/* ============================================ */}
+      {/* COORDINATES */}
+      {/* ============================================ */}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+
+        <div className="bg-white border border-slate-200 px-3 py-2 rounded-lg text-xs font-mono text-slate-700 shadow-sm flex items-center gap-2">
+
+          <Compass className="h-3.5 w-3.5 text-blue-600" />
+
+          <span>
+            Lat: {lat} | Lng: {lng}
+          </span>
+
+        </div>
+
+        {/* LIVE STATUS */}
+
+        {isTracking && (
+
+          <div className="flex items-center gap-1.5 text-xs text-green-600 font-medium">
+
+            <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+
+            Live GPS tracking active
+
           </div>
-        </div>
 
-        <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm border border-slate-200/80 px-2.5 py-1 rounded-md text-[11px] font-mono text-slate-700 shadow-sm flex items-center gap-1.5">
-          <Compass className="h-3 w-3 text-blue-600" />
-          <span>Lat: {lat} | Lng: {lng}</span>
-        </div>
+        )}
 
-        <div className="absolute top-2 right-2 bg-blue-600 text-white text-[10px] font-medium px-2 py-0.5 rounded shadow-sm opacity-90 group-hover:opacity-100 transition-opacity">
-          Click anywhere to drop pin
-        </div>
       </div>
+
+      {/* ============================================ */}
+      {/* GPS INFORMATION */}
+      {/* ============================================ */}
+
+      {isTracking && (
+
+        <div className="text-[11px] text-slate-500">
+
+          Your location is being updated automatically
+          while GPS tracking is active.
+
+        </div>
+
+      )}
+
     </div>
   );
 }
